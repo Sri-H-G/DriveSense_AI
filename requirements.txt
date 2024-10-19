@@ -1,0 +1,4 @@
+hume
+asyncio
+httpx
+python-dotenv
