@@ -1,6 +1,6 @@
 import os
 import asyncio
-from pydub import AudioSegment
+import pyaudio
 from dotenv import load_dotenv
 from hume.client import AsyncHumeClient
 from hume.empathic_voice.chat.socket_client import ChatConnectOptions
@@ -16,6 +16,12 @@ print(f"HUME_API_KEY: {HUME_API_KEY}")
 print(f"HUME_SECRET_KEY: {HUME_SECRET_KEY}")
 print(f"HUME_CONFIG_ID: {HUME_CONFIG_ID}")
 
+#Audio Settings: 
+CHUNK = 1024
+FORMAT = pyaudio.paInt16
+CHANNELS = 1 
+RATE = 16000
+
 async def on_message(message):
     print ("MESSAGE:", message)
 
@@ -23,20 +29,24 @@ async def on_message(message):
         emotions = message['model']['prosody']['scores']
         print ("Detected EMOTIONS:", emotions)
 
-        if emotions.get("stress") > 0.5:
-            print ("STRESS")
-        elif emotions.get("calm") > 0.5:
-            print ("CALM")
+        # if emotions.get("stress") > 0.5:
+        #     print ("STRESS")
+        # elif emotions.get("calm") > 0.5:
+        #     print ("CALM")
 
-async def stream_audio_to_hume(audio_file):
-    audio = AudioSegment.from_file(audio_file, format="wav")
+    
+        for emotion, score in emotions.items():
+            print(f"{emotion}: {score:.2f}")
 
-    audio_bytes = audio.raw_data
+async def stream_audio_to_hume(stream):
+
     byte_stream = Stream.new()
 
-    await byte_stream.put(audio_bytes)
+    while True: 
+        data = stream.read(CHUNK)
+        await byte_stream.put(data)
+        await asyncio.sleep(0.01)
 
-    return byte_stream
 
 async def connect_to_hume():
     client = AsyncHumeClient(api_key=HUME_API_KEY)
@@ -49,11 +59,21 @@ async def connect_to_hume():
     ) as socket: 
         print ("Connected to Hume")
 
-        byte_stream = await stream_audio_to_hume(audio_file)
+        audio = pyaudio.PyAudio()
+        stream = audio.open(format = FORMAT, 
+                            channels=CHANNELS, 
+                            rate=RATE, 
+                            input=True,
+                            frames_per_buffer=CHUNK)
+
+        await stream_audio_to_hume(stream)
 
         await asyncio.sleep(5)
 
+        stream.stop_stream()
+        stream.close()
+        audio.terminate()
+
 if __name__== "__main__":
-    audio_file = "Test.wav"
     asyncio.run(connect_to_hume())
     
